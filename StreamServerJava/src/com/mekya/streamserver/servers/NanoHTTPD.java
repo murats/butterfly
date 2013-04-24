@@ -127,18 +127,18 @@ public abstract class NanoHTTPD {
                         InputStream inputStream = finalAccept.getInputStream();
                         OutputStream outputStream = finalAccept.getOutputStream();
                         TempFileManager tempFileManager = tempFileManagerFactory.create();
-                        final HTTPSession session = new HTTPSession(tempFileManager, inputStream, outputStream);
+                        final HTTPSession session = new HTTPSession(finalAccept, tempFileManager, inputStream, outputStream);
                         asyncRunner.exec(new Runnable() {
                             @Override
                             public void run() {
                                 session.run();
                                 //TODO: comment out below block and find a way to fixed it
-                                if (finalAccept != null) {
-                                    try {
-                                        finalAccept.close();
-                                    } catch (IOException ignored) {
-                                    }
-                                }
+//                                if (finalAccept != null) {
+//                                    try {
+//                                        finalAccept.close();
+//                                    } catch (IOException ignored) {
+//                                    }
+//                                }
                             }
                         });
                     } catch (IOException e) {
@@ -178,6 +178,7 @@ public abstract class NanoHTTPD {
      * <p/>
      * <p/>
      * (By default, this delegates to serveFile() and allows directory listing.)
+     * @param streamListener 
      *
      * @param uri    Percent-decoded URI without parameters, for example "/index.cgi"
      * @param method "GET", "POST" etc.
@@ -185,7 +186,7 @@ public abstract class NanoHTTPD {
      * @param header Header entries, percent decoded
      * @return HTTP response, see class Response for details
      */
-    public abstract Response serve(String uri, Method method, Map<String, String> header, Map<String, String> parms,
+    public abstract Response serve(IStreamListener streamListener, String uri, Method method, Map<String, String> header, Map<String, String> parms,
                                    Map<String, String> files);
 
     /**
@@ -282,7 +283,7 @@ public abstract class NanoHTTPD {
     /**
      * HTTP response. Return one of these from serve().
      */
-    public static class Response implements IStreamListener {
+    public static class Response {
         /**
          * HTTP status code after processing, e.g. "200 OK", HTTP_OK
          */
@@ -300,7 +301,6 @@ public abstract class NanoHTTPD {
          */
         public Map<String, String> header = new HashMap<String, String>();
         
-        private OutputStream oStream;
 		private boolean isStreamListener = false;
 
         /**
@@ -357,7 +357,6 @@ public abstract class NanoHTTPD {
          * Sends given response to the socket.
          */
         private void send(OutputStream outputStream) {
-        	this.oStream = outputStream;
             String mime = mimeType;
             SimpleDateFormat gmtFrmt = new SimpleDateFormat("E, d MMM yyyy HH:mm:ss 'GMT'", Locale.US);
             gmtFrmt.setTimeZone(TimeZone.getTimeZone("GMT"));
@@ -451,22 +450,7 @@ public abstract class NanoHTTPD {
             }
         }
 
-		@Override
-		public int dataReceived(byte[] data, int length) {
-			 try {
-				if (length != 0) {
-					this.oStream.write(data, 0, length);
-					this.oStream.flush();
-				}
-				else {
-					this.oStream.close();
-				}
-				return length;
-			} catch (IOException e) {
-				e.printStackTrace();
-				return 0;
-			}
-		}
+		
     }
 
     public static class DefaultTempFile implements TempFile {
@@ -497,17 +481,38 @@ public abstract class NanoHTTPD {
     /**
      * Handles one session, i.e. parses the HTTP request and returns the response.
      */
-    protected class HTTPSession implements Runnable {
+    protected class HTTPSession implements Runnable, IStreamListener {
         public static final int BUFSIZE = 8192;
         private final TempFileManager tempFileManager;
         private InputStream inputStream;
         private OutputStream outputStream;
+		private Socket socket;
 
-        public HTTPSession(TempFileManager tempFileManager, InputStream inputStream, OutputStream outputStream) {
-            this.tempFileManager = tempFileManager;
+        public HTTPSession(Socket clientSocket, TempFileManager tempFileManager, InputStream inputStream, OutputStream outputStream) {
+            this.socket = clientSocket;
+        	this.tempFileManager = tempFileManager;
             this.inputStream = inputStream;
             this.outputStream = outputStream;
         }
+        
+        @Override
+		public int dataReceived(byte[] data, int length) {
+			 try {
+				if (length != 0) {
+					this.outputStream.write(data, 0, length);
+					this.outputStream.flush();
+				}
+				else {
+					this.inputStream.close();
+					this.outputStream.close();
+					this.socket.close();
+				}
+				return length;
+			} catch (IOException e) {
+				e.printStackTrace();
+				return 0;
+			}
+		}
 
         @Override
         public void run() {
@@ -635,7 +640,7 @@ public abstract class NanoHTTPD {
 
                 // Ok, now do the serve()
                 //TODO: Register to data receiver and serve it continuously
-                Response r = serve(uri, method, header, parms, files);
+                Response r = serve(this, uri, method, header, parms, files);
                 
                 if (r == null) {
                     Response.error(outputStream, Response.Status.INTERNAL_ERROR, "SERVER INTERNAL ERROR: Serve() returned a null response.");
@@ -645,8 +650,8 @@ public abstract class NanoHTTPD {
                 }
 
                 //TODO: comment out below lines and find a way to fix it.
-                in.close();
-                inputStream.close();
+//                in.close();
+//                inputStream.close();
             } catch (IOException ioe) {
                 try {
                     Response.error(outputStream, Response.Status.INTERNAL_ERROR, "SERVER INTERNAL ERROR: IOException: " + ioe.getMessage());

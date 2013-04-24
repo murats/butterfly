@@ -14,7 +14,7 @@ import com.mekya.streamserver.IStreamListener;
  * @author aomermerkaya
  *
  */
-public class StreamTcpServer extends Thread{
+public class StreamTcpServer extends Thread implements IStreamPostman{
 
 	private ArrayList<IStreamListener> streamListeners = new ArrayList<IStreamListener>();
 
@@ -30,12 +30,20 @@ public class StreamTcpServer extends Thread{
 		}
 	}
 
+	/* (non-Javadoc)
+	 * @see com.mekya.streamserver.servers.IStreamPostman#register(com.mekya.streamserver.IStreamListener)
+	 */
+	@Override
 	public void register(IStreamListener streamListener) {
 		streamListeners.add(streamListener);
 	}
 
 
 
+	/* (non-Javadoc)
+	 * @see com.mekya.streamserver.servers.IStreamPostman#removeListener(com.mekya.streamserver.IStreamListener)
+	 */
+	@Override
 	public void removeListener(IStreamListener streamListener) {
 		streamListeners.remove(streamListener);
 	}
@@ -94,10 +102,14 @@ public class StreamTcpServer extends Thread{
 				byte[] data = new byte[10240];
 				int len;
 				while ((len = istream.read(data, 0, data.length)) > 0) {
-					System.out.println("received data in stream server");
 					feedStreamListeners(data, len);
 				}
-			} catch (IOException e) {
+				feedStreamListeners(null, 0);
+			} 
+			catch (SocketException e) {
+				e.printStackTrace();
+			}
+			catch (IOException e) {
 				e.printStackTrace();
 			}
 		}

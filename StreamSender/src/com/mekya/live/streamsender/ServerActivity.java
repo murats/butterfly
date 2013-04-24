@@ -1,6 +1,5 @@
 package com.mekya.live.streamsender;
 
-import java.io.DataOutputStream;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
@@ -98,7 +97,7 @@ public class ServerActivity extends Activity implements IStreamer{
 
 			@Override
 			public void onClick(View arg0) {
-				startVideo("192.168.1.23", 24455);
+				startVideo("192.168.1.147", 24455);
 
 			}
 		});
@@ -476,7 +475,7 @@ public class ServerActivity extends Activity implements IStreamer{
 	@Override
 	public void startVideo(String address, int port) {
 		String ffmpegPath = getFilesDir().getAbsolutePath() + "/ffmpeg";
-		String videoCommand = "/data/ffmpeg/bin/ffmpeg -analyzeduration 0 -pix_fmt nv21 -s 480x360 -vcodec rawvideo -f image2pipe -i - -s 320x240 -crf 18 -g 5 -preset ultrafast -tune zerolatency -vcodec libx264 -f rtp rtp://"+address+":"+ port +"/  ";
+		String videoCommand = "/data/ffmpeg/bin/ffmpeg -analyzeduration 0 -pix_fmt nv21 -s 480x360 -vcodec rawvideo -f image2pipe -i - -s 320x240 -crf 18 -g 5 -preset ultrafast -tune zerolatency -vcodec libx264 -f mpegts tcp://"+address+":"+ port +"/  ";
 
 		try {
 			ffmpegVideoProcess = Runtime.getRuntime().exec(videoCommand);
@@ -492,6 +491,7 @@ public class ServerActivity extends Activity implements IStreamer{
 			@Override
 			public void onPreviewFrame(final byte[] buffer, Camera arg1) {
 				try {
+					System.out.println("buffer length " + buffer.length);
 					videoOutputStream.write(buffer);
 					videoOutputStream.flush();
 				} catch (IOException e) {
@@ -547,7 +547,7 @@ public class ServerActivity extends Activity implements IStreamer{
 			mCamera.setPreviewCallback(new PreviewCallback() {					
 				@Override
 				public void onPreviewFrame(final byte[] buffer, Camera arg1) {
-					//System.out.println("Writing frame to pipe");
+					System.out.println("Writing frame to pipe lenght" + buffer.length);
 					try {
 						//System.out.println("writing to video pipe");
 						oVideoStream.write(buffer);
